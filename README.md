@@ -1,15 +1,15 @@
-# IRS-Subsapce
-This repository contains the codes and datasets for our paper **"Indexed Relational Schema: How Do LLMs Encode Discourse?"**
+# CBR-Subsapce
+This repository contains the codes and datasets for our paper **"Cell-Based Representation of Relational Binding in Language Models"**
 
-We analyze how LLMs encode discourse and identify a structured subspace, which we term the IRS subspace. Moreover, causal interventions on the IRS subspace can systematically alter LLM behavior.
+We analyze how LLMs encode discourse and identify a structured subspace, which we term the CBR subspace. Moreover, causal interventions on the CBR subspace can systematically alter LLM behavior.
 
-#### Visualization of IRS Subspace: 
+#### Visualization of CBR Subspace: 
 ~~~
 ./irs_subspace_visualization.png
 ~~~
 <!--  <img src="/irs_subspace_visualization.png" width="500"> -->
 
-#### Overview of IRS Subspace based mechanism:
+#### Overview of CBR Subspace based mechanism:
 ~~~
 ./mechanism.png
 ~~~
@@ -32,14 +32,14 @@ python script/data_creation.py --nb_sample 1000
 ~~~
 
 ## Activation Extraction
-Run the following script for extracting attribute activations for IRS subspace analysis.
+Run the following script for extracting attribute activations for CBR subspace analysis.
 ~~~
 python script/activation_extraction.py
 ~~~
 
-## Sampling IRS Subspace
-Run the following script for sampling IRS subspace.
-#### Step1: sampling points from IRS subspace
+## Sampling CBR Subspace
+Run the following script for sampling CBR subspace.
+#### Step1: sampling points from CBR subspace
 ~~~
 python script/activation_sampling.py --llm_tp llama/qwen --learn_proj_ma
 ~~~
@@ -48,14 +48,14 @@ python script/activation_sampling.py --llm_tp llama/qwen --learn_proj_ma
 python script/activation_sampling.py --llm_tp llama/qwen
 ~~~
 
-## Perturbing IRS Subspace
-Run the following script for perturbing IRS subspace.
+## Perturbing CBR Subspace
+Run the following script for perturbing CBR subspace.
 ~~~
 python script/activation_perturbing.py --llm_tp llama/qwen --use_rand_proj_ma 0/1
 ~~~
 
-## Steering IRS Subspace
-Run the following script for activation steering on IRS subspace.
+## Steering CBR Subspace
+Run the following script for activation steering on CBR subspace.
 #### Step1: learning steering vector
 ~~~
 python script/steer_v_learning.py --llm_tp llama/qwen
@@ -70,10 +70,10 @@ python script/activation_steering.py --llm_tp llama/qwen --steer_tp steer_a_1_2/
 notebook/jupyter_script_for_visualization.ipynb
 ~~~
 Please run the Jupyter Notebook script above for:
-1. IRS subspace visualization
-2. IRS subspace prediction via PLS from the activations of LLMs
-3. Analyzing the generality of IRS subspace across contexts
-4. Result visualization for Perturbing IRS subspace
-5. Result visualization for activation steering on IRS subspace
-6. Result visualization for IRS subspace sampling
+1. CBR subspace visualization
+2. CBR subspace prediction via PLS from the activations of LLMs
+3. Analyzing the generality of CBR subspace across contexts
+4. Result visualization for Perturbing CBR subspace
+5. Result visualization for activation steering on CBR subspace
+6. Result visualization for CBR subspace sampling
 
