@@ -5,7 +5,7 @@ We analyze how LLMs encode discourse and identify a structured subspace, which w
 
 #### Visualization of CBR Subspace: 
 ~~~
-./irs_subspace_visualization.png
+./cbr_subspace_visualization.png
 ~~~
 <!--  <img src="/cbr_subspace_visualization.png" width="500"> -->
 
