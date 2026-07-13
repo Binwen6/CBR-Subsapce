@@ -17,6 +17,8 @@ from baukit import TraceDict, nethook
 from einops import rearrange, einsum
 import argparse
 
+from local_models import resolve_model_path, load_tokenizer
+
 def compute_prev_clue_pos(input_ids, clue_id, last=False):
     """
     Computes the position of the previous query clue label token.
@@ -50,10 +52,11 @@ def get_model_and_tokenizer(model_name, device):
 
     if model_name == "llama":
         model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
     elif model_name == "qwen":
         model_id = "Qwen/Qwen3-8B"
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+    model_id = resolve_model_path(model_id)
+    tokenizer = load_tokenizer(model_id)
         
     tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "left"
@@ -66,9 +69,10 @@ def get_model_and_tokenizer(model_name, device):
 
 def load_tb_data(tokenizer, num_samples, data_file, rand=True,
                  data_tp="space", input_tp="story"):
-    
+
     with open(data_file, encoding="utf-8") as f:
         data = [json.loads(line) for line in f]
+    num_samples = min(num_samples, len(data))
             
     if rand:
         random.shuffle(data)

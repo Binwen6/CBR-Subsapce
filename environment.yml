@@ -1,4 +1,4 @@
-name: finetuning
+name: CBR-finetuning
 channels:
   - anaconda
   - huggingface

@@ -1,0 +1,6 @@
+# generated model activations / projections (large binaries)
+*.pt
+
+# python cache
+__pycache__/
+*.pyc

@@ -17,6 +17,8 @@ from baukit import TraceDict, nethook
 from einops import rearrange, einsum
 import argparse
 
+from local_models import resolve_model_path, load_tokenizer
+
 def compute_prev_clue_pos(input_ids, clue_id, last=False):
     """
     Computes the position of the previous query clue label token.
@@ -50,10 +52,11 @@ def get_model_and_tokenizer(model_name, device):
 
     if model_name == "llama":
         model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
     elif model_name == "qwen":
         model_id = "Qwen/Qwen3-8B"
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+    model_id = resolve_model_path(model_id)
+    tokenizer = load_tokenizer(model_id)
     tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "left"
     model = AutoModelForCausalLM.from_pretrained(
@@ -66,6 +69,7 @@ def get_model_and_tokenizer(model_name, device):
 def load_tb_data(tokenizer, num_samples, data_file, rand=True,):
     with open(data_file, encoding="utf-8") as f:
         data = [json.loads(line) for line in f]
+    num_samples = min(num_samples, len(data))
 
     if rand:
         random.shuffle(data)
@@ -372,8 +376,13 @@ def activation_patching_resid_ap(
         ):
     if isinstance(inputs, tuple):
         inputs = inputs[0]
+    rest = ()
     if isinstance(output, tuple):
+        # keep the non-hidden-state elements (e.g. KV cache) to return unchanged
+        rest = output[1:]
         outputs = output[0]
+    else:
+        outputs = output
 
     outputs = rearrange(
         outputs,
@@ -401,7 +410,7 @@ def activation_patching_resid_ap(
         d_resid=model.config.hidden_size,
     )
     torch.cuda.empty_cache()
-    return (output,)
+    return (output,) + rest
 
 
 def eval_model_performance(model, dataloader, input_tp="story", index="1_2"):
@@ -799,6 +808,13 @@ if __name__ == "__main__":
     parser.add_argument("--input_tp", type=str, default="story", help="table / temp / story")
     parser.add_argument("--cr_tp", type=str, default="acr", help="acr / ecr")
     parser.add_argument("--index", type=str, default="1_2", help="index in the space")
+    parser.add_argument("--device", type=str, default="cuda:0", help="cuda:0 / cuda:1 / cpu")
+    parser.add_argument("--data_tps", type=str, default="job,create,space,relation,city",
+                        help="comma-separated subset of datasets to process")
+    parser.add_argument("--grid_shard", type=int, default=0,
+                        help="index of this process's grid shard (0 ~ n_shards-1)")
+    parser.add_argument("--n_shards", type=int, default=1,
+                        help="split grids across n parallel processes")
 
     parser.add_argument("--l1", type=int, default=10, help="0 ~ 31")
     parser.add_argument("--l2", type=int, default=20, help="0 ~ 31")
@@ -813,11 +829,11 @@ if __name__ == "__main__":
     parser.add_argument("--learn_proj_ma", action="store_true", help="Learn proj ma or not (default: False)")
     args = parser.parse_args()
     
-    device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     model, tokenizer = get_model_and_tokenizer(args.llm_tp, device)
     print("Model and Tokenizer loaded")
 
-    data_tps = ["job", "create", "space", "relation", "city"]
+    data_tps = args.data_tps.split(",")
     sd_result = "./result/sample/"
 
     for data_tp in data_tps:
@@ -842,6 +858,8 @@ if __name__ == "__main__":
         else:
             proj_ma = torch.load(sd_result + f"{args.llm_tp}_{data_tp}_proj_ma.pt").to(model.device)
             grids = torch.load(sd_result + f"{args.llm_tp}_{data_tp}_grids.pt").to(model.device)
+            if args.n_shards > 1:
+                grids = grids[args.grid_shard::args.n_shards]
 
             if args.llm_tp == "llama":
                 args.alpha = 1.00
@@ -872,6 +890,9 @@ if __name__ == "__main__":
                                                 index=args.index,
                                                 grids=grids)
                 
-            with open(sd_result + f"ap_result_{args.llm_tp}_{data_tp}_{args.index}.json", 'w') as fout:
+            sfout = sd_result + f"ap_result_{args.llm_tp}_{data_tp}_{args.index}.json"
+            if args.n_shards > 1:
+                sfout = sfout.replace(".json", f"_shard{args.grid_shard}of{args.n_shards}.json")
+            with open(sfout, 'w') as fout:
                 json.dump(result, fout)
         

@@ -7,12 +7,11 @@ from tqdm import tqdm
 import sys
 from multiprocessing import Pool
 
-model_id = "mistralai/Mistral-7B-v0.1"
-tokenizer_mistral = AutoTokenizer.from_pretrained(model_id)
-model_id = "meta-llama/Meta-Llama-3-8B"
-tokenizer_llama = AutoTokenizer.from_pretrained(model_id)
-model_id = "Qwen/Qwen3-8B"
-tokenizer_qwen = AutoTokenizer.from_pretrained(model_id)
+from local_models import resolve_model_path, load_tokenizer
+
+tokenizer_mistral = load_tokenizer(resolve_model_path("mistralai/Mistral-7B-v0.1"))
+tokenizer_llama = load_tokenizer(resolve_model_path("meta-llama/Meta-Llama-3-8B"))
+tokenizer_qwen = load_tokenizer(resolve_model_path("Qwen/Qwen3-8B"))
 
 from openai import OpenAI
 import os

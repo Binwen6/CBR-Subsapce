@@ -3,6 +3,7 @@ import random
 import math
 import sys
 import json
+import argparse
 import numpy as np
 from functools import partial
 from collections import defaultdict
@@ -15,7 +16,6 @@ from datasets import Dataset as Dataset_ds
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from transformers import Qwen2Tokenizer
 
 import torch.nn as nn
 import torch.nn.init as init
@@ -66,6 +66,9 @@ def compute_prev_clue_pos(input_ids, clue_id, last=False):
     return prev_clue_pos
 
 
+from local_models import resolve_model_path, load_tokenizer
+
+
 def get_model_and_tokenizer(model_name, device):
     """
     Loads the model and tokenizer.
@@ -78,15 +81,15 @@ def get_model_and_tokenizer(model_name, device):
         #model_id = "meta-llama/Llama-3.1-8B"
         #model_id = "meta-llama/Llama-3.1-8B-Instruct"
         model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
     elif model_name == "qwen":
         model_id = "Qwen/Qwen3-8B"
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
     elif model_name == "mistral":
         #model_id = "mistralai/Mistral-7B-v0.1"
         model_id = "mistralai/Mistral-7B-Instruct-v0.2"
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        
+
+    model_id = resolve_model_path(model_id)
+    tokenizer = load_tokenizer(model_id)
+
     tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "left"
     model = AutoModelForCausalLM.from_pretrained(
@@ -118,6 +121,7 @@ def ablate_table(input_t, att):
 def load_tb_data(tokenizer, num_samples, data_file, rand=True):
     with open(data_file, encoding="utf-8") as f:
         data = [json.loads(line) for line in f]
+    num_samples = min(num_samples, len(data))
         
     if rand:
         random.shuffle(data)
@@ -190,10 +194,6 @@ def load_tb_data(tokenizer, num_samples, data_file, rand=True):
         prompts_table.append(ctx_t)
         prompts_temp.append(ctx)
         prompts_story.append(ctx_s)
-        
-        ctx = "Context: " + data[i][f"input_{vari}"].strip()
-        ctx_t = "Context: " + data[i][f"t_input_{vari}"].strip()
-        ctx_s = "Context: " + data[i][f"s_input_{vari}"].strip()
 
         label_y = [1, 2, 3,]
         label_x = [1, 2, 3, 4, 5]
@@ -253,7 +253,6 @@ def load_dataloader(
         tokenizer=tokenizer,
         num_samples=num_samples,
         data_file=data_file,
-        ablate_t=ablate_t,
     )
 
     base_tokens_table = raw_data[0]
@@ -498,8 +497,9 @@ def extract_activation_for_visualization(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Args for activation patching")
     
-    parser.add_argument("--llm_tp", type=str, default="llama", help="llama / qwen")
+    parser.add_argument("--llm_tp", type=str, default="llama", help="llama / qwen / mistral")
     parser.add_argument("--input_tp", type=str, default="story", help="table / temp / story")
+    parser.add_argument("--device", type=int, default=0, help="cuda device id")
     parser.add_argument("--layer", type=int, default=15, help="")
     parser.add_argument("--num_samples", type=int, default=300, help="")
     parser.add_argument("--batch_size", type=int, default=100, help="")
@@ -509,9 +509,9 @@ if __name__ == "__main__":
     
     ###Extract Activation for Visualization###
     llm_tp = args.llm_tp
-    dv_id = args.input_tp
+    dv_id = args.device
     layer = args.layer
-    
+
     device = torch.device(f"cuda:{dv_id}" if torch.cuda.is_available() else "cpu")
     model, tokenizer = get_model_and_tokenizer(llm_tp, device)
     print("Model and Tokenizer loaded")
@@ -521,8 +521,9 @@ if __name__ == "__main__":
     num_samples = args.num_samples
     batch_size = args.batch_size
     
+    os.makedirs(sd_out, exist_ok=True)
     for data_tp in ["city", "create", "job", "relation", "space"]:
-        datafile = f"./data/{data_tp}_tss_all.jsonl"
+        datafile = os.path.join(sd_in, f"{data_tp}_tts_all.jsonl")
         for input_tp in ["table", "temp", "story",]:
                 sfout = sd_out + f"{llm_tp}_l{layer}_{data_tp}_{input_tp}.pt"
                 print(f"Processing {data_tp} dataset {input_tp} input ...")
