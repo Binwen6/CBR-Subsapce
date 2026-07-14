@@ -745,12 +745,17 @@ if __name__ == "__main__":
     parser.add_argument("--pls_dim", type=int, default=5, help="3, 4, 5, ...")
     parser.add_argument("--num_samples", type=int, default=500, help="the number of samples")
     parser.add_argument("--batch_size", type=int, default=250, help="the batch size")
+    parser.add_argument("--device", type=str, default="cuda:0", help="cuda:0 / cuda:1 / cpu")
+    parser.add_argument("--data_tps", type=str, default="city,create,job,relation,space",
+                        help="comma-separated subset of datasets to process")
+    parser.add_argument("--input_tps", type=str, default="story,temp,table",
+                        help="comma-separated subset of input formats to process")
     args = parser.parse_args()
-    
+
     llm_tp = args.llm_tp
     pls_dim = args.pls_dim
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     model, tokenizer = get_model_and_tokenizer(llm_tp, device)
     print("Model and Tokenizer loaded")
     sd_in = "./data/"
@@ -759,8 +764,8 @@ if __name__ == "__main__":
     num_samples = args.num_samples
     batch_size = args.batch_size
     
-    for data_tp in ["city", "create", "job", "relation", "space"][:]:
-        for input_tp in ["story", "temp", "table"][1:]:
+    for data_tp in args.data_tps.split(","):
+        for input_tp in args.input_tps.split(","):
             print(f"Processing {data_tp} dataset {input_tp} input ...")
             datafile = sd_in + f"{data_tp}_tts_all.jsonl"
             
