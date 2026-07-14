@@ -357,7 +357,7 @@ def load_dataloader(
     raw_data = load_tb_data(
         tokenizer=tokenizer,
         num_samples=num_samples,
-        lst_data_file=lst_data_file,
+        data_file=lst_data_file,
         data_tp=data_tp,
         input_tp=input_tp,
     )
