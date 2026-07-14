@@ -69,7 +69,7 @@ def get_model_and_tokenizer(model_name, device):
 
 
 def load_tb_data(tokenizer, num_samples, data_file, rand=True,
-                 data_tp="space", input_tp="story", enti=1, atti=2):
+                 data_tp="space", input_tp="story", enti=1, atti=2, vari="p_cr"):
 
     with open(data_file, encoding="utf-8") as f:
         data = [json.loads(line) for line in f]
@@ -113,7 +113,11 @@ def load_tb_data(tokenizer, num_samples, data_file, rand=True,
     prompts_temp = []
     prompts_table = []
     prompts_story = []
-    
+
+    prompts_temp_cr = []
+    prompts_table_cr = []
+    prompts_story_cr = []
+
     for i in range(num_samples):
         ent1 = data[i]["ents"][0]
         ent2 = data[i]["ents"][1]
@@ -155,6 +159,12 @@ def load_tb_data(tokenizer, num_samples, data_file, rand=True,
         ctx_s = "Context: " + data[i]["s_input"]
         ctx_t = ctx_t.replace("||", "|\n|")
 
+        # counterfactual contexts (vari: "p_cr" position-permuted / "r_cr" relation-replaced)
+        ctx_cr = "Context: " + data[i][f"input_{vari}"]
+        ctx_t_cr = "Context: " + data[i][f"t_input_{vari}"]
+        ctx_s_cr = "Context: " + data[i][f"s_input_{vari}"]
+        ctx_t_cr = ctx_t_cr.replace("||", "|\n|")
+
         que_ent1 = data[i]["ents"][enti_cr1]#few shot
         que_ent2 = data[i]["ents"][enti]
         que_att1 = data[i][que_att_tp][enti_cr1]#few shot
@@ -164,6 +174,9 @@ def load_tb_data(tokenizer, num_samples, data_file, rand=True,
         prompts_table.append(ctx_t + que)
         prompts_temp.append(ctx + que)
         prompts_story.append(ctx_s + que)
+        prompts_table_cr.append(ctx_t_cr + que)
+        prompts_temp_cr.append(ctx_cr + que)
+        prompts_story_cr.append(ctx_s_cr + que)
         labels.append(tokenizer.encode(" %s"%que_att2)[-1])
         
         labels1.append(tokenizer.encode(" %s"%data[i]["atts1"][enti])[-1])
@@ -176,7 +189,11 @@ def load_tb_data(tokenizer, num_samples, data_file, rand=True,
     input_ids_temp = input_tokens_temp["input_ids"]
     input_tokens_story = tokenizer(prompts_story, padding=True, return_tensors="pt")
     input_ids_story = input_tokens_story["input_ids"]
-    
+
+    input_ids_table_cr = tokenizer(prompts_table_cr, padding=True, return_tensors="pt")["input_ids"]
+    input_ids_temp_cr = tokenizer(prompts_temp_cr, padding=True, return_tensors="pt")["input_ids"]
+    input_ids_story_cr = tokenizer(prompts_story_cr, padding=True, return_tensors="pt")["input_ids"]
+
     ents1 = torch.tensor(ents1)
     ents2 = torch.tensor(ents2)
     ents3 = torch.tensor(ents3)
@@ -205,7 +222,8 @@ def load_tb_data(tokenizer, num_samples, data_file, rand=True,
             atts2_1, atts2_2, atts2_3,
             atts3_1, atts3_2, atts3_3,
             atts4_1, atts4_2, atts4_3,
-            labels, labels1, labels2, labels3,)
+            labels, labels1, labels2, labels3,
+            input_ids_table_cr, input_ids_temp_cr, input_ids_story_cr,)
 
 
 def load_dataloader(
@@ -216,8 +234,9 @@ def load_dataloader(
         data_tp: str="space",
         input_tp: str="story",
         enti: int=2,
-        atti: int=2,):
-    
+        atti: int=2,
+        vari: str="p_cr",):
+
     raw_data = load_tb_data(
         tokenizer=tokenizer,
         num_samples=num_samples,
@@ -226,6 +245,7 @@ def load_dataloader(
         input_tp=input_tp,
         enti=enti,
         atti=atti,
+        vari=vari,
     )
 
     base_tokens_table = raw_data[0]
@@ -257,11 +277,18 @@ def load_dataloader(
     labels2 = raw_data[20]
     labels3 = raw_data[21]
 
+    base_tokens_table_cr = raw_data[22]
+    base_tokens_temp_cr = raw_data[23]
+    base_tokens_story_cr = raw_data[24]
+
     dataset = Dataset_ds.from_dict(
         {
             "base_tokens_table": base_tokens_table,
             "base_tokens_temp": base_tokens_temp,
             "base_tokens_story": base_tokens_story,
+            "base_tokens_table_cr": base_tokens_table_cr,
+            "base_tokens_temp_cr": base_tokens_temp_cr,
+            "base_tokens_story_cr": base_tokens_story_cr,
             "ents1": ents1,
             "ents2": ents2,
             "ents3": ents3,
@@ -283,7 +310,9 @@ def load_dataloader(
             "labels3": labels3,
         }
     ).with_format("numpy")
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    # shuffle must stay off: patching indexes cached batches by position (data
+    # is already shuffled in load_tb_data)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     return dataloader
 
 
@@ -628,7 +657,8 @@ def act_patching_main_resid_ap(
         use_rand_proj_ma: int=0,
         patch_tp: int="modify",
         beta: float=0.55,
-        nb_loop: int=1,):
+        nb_loop: int=1,
+        vari: str="p_cr",):
     print(beta)
     accs = defaultdict(list)
     apply_softmax = torch.nn.Softmax(dim=-1)
@@ -646,23 +676,25 @@ def act_patching_main_resid_ap(
                 input_tp=input_tp,
                 enti=enti,
                 atti=atti,
+                vari=vari,
             )
 
             acc, logit = eval_model_performance(model, dataloader, input_tp=input_tp)
         print(f"Model Acc.: {acc} Logit: {logit}")
-    
+
         base_accs.append([round(acc * 100, 2), round(logit, 2)])
-        
+
         correct_count, total_count = 0, 0
         total_logit = []
+        # Step 1: Compute clean and corrupt caches (batch order matches the
+        # dataloader iteration below since shuffle is off)
+        (
+            clean_cache,
+            corrupt_cache,
+            hook_points,
+        ) = get_caches_resid_ap(model, dataloader, l1, l2, input_tp=input_tp)
+
         for bi, inputs in enumerate(dataloader):
-            # Step 1: Compute clean and corrupt caches
-            (
-                clean_cache,
-                corrupt_cache,
-                hook_points,
-            ) = get_caches_resid_ap(model, dataloader, l1, l2, input_tp=input_tp)
-        
             for k, v in inputs.items():
                 if v is not None and isinstance(v, torch.Tensor):
                     inputs[k] = v.to(model.device)
@@ -744,6 +776,7 @@ if __name__ == "__main__":
     parser.add_argument("--llm_tp", type=str, default="llama", help="llama / qwen")
     parser.add_argument("--input_tp", type=str, default="story", help="table / temp / story")
     parser.add_argument("--space_tp", type=str, default="i", help="i / r")
+    parser.add_argument("--vari_tp", type=str, default="p_cr", help="p_cr / r_cr (counterfactual type)")
     parser.add_argument("--cr_tp", type=str, default="acr", help="acr / ecr")
     parser.add_argument("--enti", type=int, default=1, help="0 / 1 / 2")
     parser.add_argument("--atti", type=int, default=1, help="1 / 2 / 3 / 4")
@@ -795,7 +828,8 @@ if __name__ == "__main__":
                                                 use_rand_proj_ma=args.use_rand_proj_ma,
                                                 patch_tp=args.patch_tp,
                                                 beta=beta,
-                                                nb_loop=args.nb_loop,)
+                                                nb_loop=args.nb_loop,
+                                                vari=args.vari_tp,)
 
             all_result[data_tp][beta] = result
 
