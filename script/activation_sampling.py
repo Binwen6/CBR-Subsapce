@@ -500,7 +500,8 @@ def act_patching_main_resid_ap(
                             index=index,
                         ),
                 ) as _:
-                    outputs = model(inputs[f"base_tokens_{input_tp}{index}"].to(model.device))
+                    with torch.no_grad():
+                        outputs = model(inputs[f"base_tokens_{input_tp}{index}"].to(model.device))
                     
                 for idx in range(inputs[f"base_tokens_{input_tp}{index}"].size(0)):
                     label = inputs[f"atts{index}"][idx].item()

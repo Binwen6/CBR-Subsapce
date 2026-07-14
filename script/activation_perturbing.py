@@ -687,7 +687,8 @@ def act_patching_main_resid_ap(
                         beta=beta,
                     ),
             ) as _:
-                outputs = model(inputs[f"base_tokens_{input_tp}"])
+                with torch.no_grad():
+                    outputs = model(inputs[f"base_tokens_{input_tp}"])
                     
             for idx in range(inputs[f"base_tokens_{input_tp}"].size(0)):
                 label = inputs["labels"][idx].item()
